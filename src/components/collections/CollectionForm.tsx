@@ -3,13 +3,14 @@ import { FolderPlus } from 'lucide-react';
 import type { Collection } from '../../types';
 
 interface CollectionFormProps {
-  onSubmit: (data: { name: string; description: string }) => void;
+  onSubmit: (data: { name: string; alias: string; description: string }) => void;
   onCancel: () => void;
   initial?: Collection;
 }
 
 interface FormValues {
   name: string;
+  alias: string;
   description: string;
 }
 
@@ -17,6 +18,7 @@ export const CollectionForm = ({ onSubmit, onCancel, initial }: CollectionFormPr
   const { register, handleSubmit, formState: { errors } } = useForm<FormValues>({
     defaultValues: {
       name: initial?.name || '',
+      alias: initial?.alias || '',
       description: initial?.description || '',
     },
   });
@@ -32,6 +34,21 @@ export const CollectionForm = ({ onSubmit, onCancel, initial }: CollectionFormPr
           autoFocus
         />
         {errors.name && <p className="text-xs text-danger-400 mt-1">{errors.name.message}</p>}
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Alias (URL Prefix)</label>
+        <input
+          {...register('alias', { 
+            required: 'Required',
+            pattern: {
+              value: /^[a-z0-9-]+$/,
+              message: 'Only lowercase letters, numbers, and hyphens (no spaces)'
+            }
+          })}
+          className="glass-input font-mono"
+          placeholder="e.g. users-api"
+        />
+        {errors.alias && <p className="text-xs text-danger-400 mt-1">{errors.alias.message}</p>}
       </div>
       <div>
         <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Description</label>

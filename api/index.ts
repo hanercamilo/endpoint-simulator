@@ -112,9 +112,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// API route: GET /e/:slug
-app.get('/e/:slug', async (req: Request, res: Response) => {
-  const { slug } = req.params;
+// API route: GET /e/:alias/:slug
+app.get('/e/:alias/:slug', async (req: Request, res: Response) => {
+  const { alias, slug } = req.params;
 
   try {
     const supabase = getSupabaseClient();
@@ -126,7 +126,7 @@ app.get('/e/:slug', async (req: Request, res: Response) => {
         buildResponse(
           {
             message: 'Demo response - Configure Supabase in .env to use real data',
-            endpoint: slug,
+            endpoint: `${alias}/${slug}`,
             note: 'Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env file',
           },
           200
@@ -134,20 +134,16 @@ app.get('/e/:slug', async (req: Request, res: Response) => {
       );
     }
 
-    // Fetch endpoint from Supabase
+    // Fetch endpoint from Supabase joined with collections to match alias
     const { data, error } = await supabase
       .from('endpoints')
-      .select('*')
+      .select('*, collections!inner(alias)')
       .eq('slug', slug)
+      .eq('collections.alias', alias)
       .single();
 
     if (error || !data) {
-      console.warn(`Endpoint not found: ${slug}. Error details:`, error);
-      
-      // DEPURACIÓN: Intenta traer todos para ver si hay alguno (borrar luego)
-      const all = await supabase.from('endpoints').select('slug');
-      console.warn(`Endpoints in DB:`, all.data);
-
+      console.warn(`Endpoint not found: ${alias}/${slug}. Error details:`, error);
       return res.status(404).json(
         buildResponse(null, 404)
       );
@@ -184,7 +180,7 @@ app.get('/e/:slug', async (req: Request, res: Response) => {
     const response = buildResponse(responseData, code);
     res.status(code).json(response);
 
-    console.log(`Endpoint served: ${slug} (${code})`);
+    console.log(`Endpoint served: ${alias}/${slug} (${code})`);
 
   } catch (error) {
     console.error('Error fetching endpoint:', error);

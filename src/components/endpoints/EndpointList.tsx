@@ -3,12 +3,13 @@ import { Globe, Trash2, Edit2, Code, Eye } from 'lucide-react';
 import type { Endpoint } from '../../types';
 
 interface EndpointListProps {
+  collectionAlias: string;
   endpoints: Endpoint[];
   onEdit: (endpoint: Endpoint) => void;
   onDelete: (id: string) => void;
 }
 
-export const EndpointList = ({ endpoints, onEdit, onDelete }: EndpointListProps) => {
+export const EndpointList = ({ collectionAlias, endpoints, onEdit, onDelete }: EndpointListProps) => {
   if (endpoints.length === 0) {
     return (
       <div className="glass-card p-8 text-center">
@@ -34,11 +35,11 @@ export const EndpointList = ({ endpoints, onEdit, onDelete }: EndpointListProps)
           </div>
           <div className="flex-1 min-w-0">
             <h4 className="text-sm font-medium text-[var(--text-primary)] truncate">{ep.name}</h4>
-            <p className="text-xs text-[var(--text-muted)] font-mono truncate">/e/{ep.slug}</p>
+            <p className="text-xs text-[var(--text-muted)] font-mono truncate">/e/{collectionAlias}/{ep.slug}</p>
           </div>
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <a
-              href={`/e/${ep.slug}`}
+              href={`/e/${collectionAlias}/${ep.slug}`}
               target="_blank"
               rel="noopener noreferrer"
               className="p-1.5 rounded-lg hover:bg-accent-500/10 transition-colors text-accent-400"
@@ -47,7 +48,7 @@ export const EndpointList = ({ endpoints, onEdit, onDelete }: EndpointListProps)
               <Code className="w-4 h-4" />
             </a>
             <a
-              href={`/preview/${ep.slug}`}
+              href={`/preview/${collectionAlias}/${ep.slug}`}
               className="p-1.5 rounded-lg hover:bg-[var(--border-color)] transition-colors text-[var(--text-muted)]"
               title="Preview endpoint"
             >

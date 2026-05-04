@@ -24,6 +24,7 @@ type View = 'dashboard' | 'import' | 'endpoint-create' | 'endpoint-edit';
 interface SbCollection {
   id: string;
   name: string;
+  alias: string;
   description: string;
   user_id: string;
   created_at: string;
@@ -82,6 +83,7 @@ export const Dashboard = () => {
       const mapped: Collection[] = (sbCols as SbCollection[]).map(c => ({
         id: c.id,
         name: c.name,
+        alias: c.alias || c.name.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
         description: c.description || '',
         userId: c.user_id,
         createdAt: c.created_at,
@@ -131,6 +133,7 @@ export const Dashboard = () => {
     const payload = {
       id: col.id,
       name: col.name,
+      alias: col.alias,
       description: col.description,
       user_id: user.id,
       updated_at: col.updatedAt,
@@ -173,11 +176,12 @@ export const Dashboard = () => {
     await (supabase as any).from(table).delete().eq('id', id);
   };
 
-  const handleCreateCollection = async (data: { name: string; description: string }) => {
+  const handleCreateCollection = async (data: { name: string; alias: string; description: string }) => {
     const now = new Date().toISOString();
     const col: Collection = {
       id: crypto.randomUUID(),
       name: data.name,
+      alias: data.alias,
       description: data.description,
       userId: user?.id || 'local',
       createdAt: now,
@@ -191,11 +195,12 @@ export const Dashboard = () => {
     await loadLocalData();
   };
 
-  const handleUpdateCollection = async (data: { name: string; description: string }) => {
+  const handleUpdateCollection = async (data: { name: string; alias: string; description: string }) => {
     if (!editingCollection) return;
     const updated: Collection = {
       ...editingCollection,
       name: data.name,
+      alias: data.alias,
       description: data.description,
       updatedAt: new Date().toISOString(),
     };
@@ -404,6 +409,7 @@ export const Dashboard = () => {
                     </div>
 
                     <EndpointList
+                      collectionAlias={activeCollection.alias}
                       endpoints={collectionEndpoints}
                       onEdit={handleEditEndpoint}
                       onDelete={handleDeleteEndpoint}
@@ -439,6 +445,7 @@ export const Dashboard = () => {
               >
                 <EndpointEditor
                   collectionId={activeCollection.id}
+                  collectionAlias={activeCollection.alias}
                   parsedData={parsedData || undefined}
                   separator={parsedSeparator}
                   rootKey={parsedRootKey}
@@ -457,6 +464,7 @@ export const Dashboard = () => {
               >
                 <EndpointEditor
                   collectionId={editingEndpoint.collectionId}
+                  collectionAlias={collections.find(c => c.id === editingEndpoint.collectionId)?.alias}
                   endpoint={editingEndpoint}
                   onSave={handleUpdateEndpoint}
                   onCancel={() => { setView('dashboard'); setEditingEndpoint(null); }}

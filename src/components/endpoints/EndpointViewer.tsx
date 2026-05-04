@@ -9,19 +9,23 @@ import { JsonViewer } from '../common/JsonViewer';
 import { CopyButton } from '../common/CopyButton';
 
 export const EndpointViewer = () => {
-  const { slug } = useParams<{ slug: string }>();
+  const { alias, slug } = useParams<{ alias: string; slug: string }>();
   const [endpoint, setEndpoint] = useState<Endpoint | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadEndpoint = async () => {
-      if (!slug) return;
-      const ep = await db.endpoints.where('slug').equals(slug).first();
+      if (!alias || !slug) return;
+      const col = await db.collections.where('alias').equals(alias).first();
+      let ep = null;
+      if (col) {
+        ep = await db.endpoints.where({ collectionId: col.id, slug }).first();
+      }
       setEndpoint(ep || null);
       setLoading(false);
     };
     loadEndpoint();
-  }, [slug]);
+  }, [alias, slug]);
 
   const getResponse = () => {
     if (!endpoint) return {};
@@ -75,10 +79,10 @@ export const EndpointViewer = () => {
           </a>
           <div className="flex-1 min-w-0">
             <h1 className="text-lg font-semibold text-[var(--text-primary)]">{endpoint.name}</h1>
-            <p className="text-xs text-[var(--text-muted)] font-mono">/e/{endpoint.slug}</p>
+            <p className="text-xs text-[var(--text-muted)] font-mono">/e/{alias}/{endpoint.slug}</p>
           </div>
           <a
-            href={`/e/${endpoint.slug}`}
+            href={`/e/${alias}/${endpoint.slug}`}
             target="_blank"
             rel="noopener noreferrer"
             className="btn-secondary flex items-center gap-2 text-xs py-2 px-3"

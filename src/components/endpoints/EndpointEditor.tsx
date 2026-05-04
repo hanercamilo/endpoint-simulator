@@ -17,6 +17,7 @@ import { Modal } from '../common/Modal';
 
 interface EndpointEditorProps {
   collectionId: string;
+  collectionAlias?: string;
   endpoint?: Endpoint;
   parsedData?: ParsedData;
   separator?: SeparatorType;
@@ -50,6 +51,7 @@ const tryFormatJson = (text: string): string => {
 
 export const EndpointEditor = ({
   collectionId,
+  collectionAlias,
   endpoint,
   parsedData,
   separator = ',',
@@ -258,11 +260,18 @@ export const EndpointEditor = ({
               </div>
               <div className="flex-1">
                 <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Slug</label>
-                <input
-                  {...register('slug', { required: 'Required', pattern: { value: /^[a-z0-9-]+$/, message: 'Lowercase, numbers, hyphens' } })}
-                  className="glass-input font-mono"
-                  placeholder="get-users"
-                />
+                <div className="flex bg-surface-900 border border-[var(--border-color)] rounded-lg overflow-hidden focus-within:border-accent-500 focus-within:ring-1 focus-within:ring-accent-500 transition-all">
+                  {collectionAlias && (
+                    <div className="px-3 flex items-center bg-surface-800 text-[var(--text-muted)] text-xs border-r border-[var(--border-color)]">
+                      /e/{collectionAlias}/
+                    </div>
+                  )}
+                  <input
+                    {...register('slug', { required: 'Required', pattern: { value: /^[a-z0-9-]+$/, message: 'Lowercase, numbers, hyphens' } })}
+                    className="flex-1 bg-transparent px-3 py-2 text-sm text-[var(--text-primary)] font-mono focus:outline-none"
+                    placeholder="get-users"
+                  />
+                </div>
                 {errors.slug && <p className="text-xs text-danger-400 mt-1">{errors.slug.message}</p>}
               </div>
             </div>

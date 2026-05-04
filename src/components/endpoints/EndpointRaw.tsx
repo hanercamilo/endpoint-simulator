@@ -4,13 +4,22 @@ import { db } from '../../lib/db';
 import { buildResponse } from '../../lib/parser';
 
 export const EndpointRaw = () => {
-  const { slug } = useParams<{ slug: string }>();
+  const { alias, slug } = useParams<{ alias: string; slug: string }>();
   const [json, setJson] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
-      if (!slug) return;
-      const ep = await db.endpoints.where('slug').equals(slug).first();
+      if (!alias || !slug) return;
+      
+      const col = await db.collections.where('alias').equals(alias).first();
+      let ep;
+      
+      if (col) {
+        ep = await db.endpoints
+          .where({ collectionId: col.id, slug })
+          .first();
+      }
+
       if (!ep) {
         setJson(JSON.stringify({ status: false, data: null, error: [{ code: 404, message: 'Endpoint not found' }] }, null, 2));
         return;

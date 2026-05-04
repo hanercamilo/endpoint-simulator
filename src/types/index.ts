@@ -1,6 +1,7 @@
 export interface Collection {
   id: string;
   name: string;
+  alias: string;
   description: string;
   userId: string;
   createdAt: string;

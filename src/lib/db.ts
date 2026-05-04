@@ -13,6 +13,9 @@ class EndpointSimDB extends Dexie {
       endpoints: 'id, collectionId, slug, name, updatedAt',
       requestLogs: 'id, endpointId, endpointSlug, timestamp',
     });
+    this.version(2).stores({
+      collections: 'id, userId, name, alias, updatedAt',
+    });
   }
 }
 

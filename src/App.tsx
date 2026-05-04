@@ -57,8 +57,8 @@ const AppRouter = () => {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/e/:slug" element={<EndpointRaw />} />
-        <Route path="/preview/:slug" element={<EndpointViewer />} />
+        <Route path="/e/:alias/:slug" element={<EndpointRaw />} />
+        <Route path="/preview/:alias/:slug" element={<EndpointViewer />} />
         <Route path="/" element={<Dashboard />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
