@@ -82,7 +82,7 @@ export const EndpointRaw = () => {
 
   return (
     <pre
-      className="min-h-screen bg-[#0d1117] text-[#c9d1d9] p-6 font-mono text-sm leading-relaxed whitespace-pre-wrap m-0"
+      className="min-h-screen bg-surface-50 dark:bg-[#0d1117] text-[var(--text-primary)] dark:text-[#c9d1d9] p-6 font-mono text-sm leading-relaxed whitespace-pre-wrap m-0"
       style={{ tabSize: 2 }}
     >
       {json}

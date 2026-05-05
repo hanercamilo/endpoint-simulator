@@ -148,7 +148,7 @@ export const EndpointViewer = () => {
             <CopyButton text={responseJson} />
           </div>
 
-          <div className="bg-surface-950/50 rounded-lg p-4 overflow-auto max-h-[600px] scrollbar-thin">
+          <div className="bg-[#0d1117] text-[#c9d1d9] rounded-xl p-4 overflow-auto max-h-[600px] scrollbar-thin border border-[var(--border-color)]">
             <JsonViewer data={response} />
           </div>
         </div>
