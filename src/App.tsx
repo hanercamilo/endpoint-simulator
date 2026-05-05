@@ -12,10 +12,7 @@ type AppStep = 'auth' | 'app';
 
 const AppRouter = () => {
   const { user, loading } = useAuth();
-  const [step, setStep] = useState<AppStep>(() => {
-    if (!localStorage.getItem('skipped_auth')) return 'auth';
-    return 'app';
-  });
+  const [step, setStep] = useState<AppStep>('auth');
 
   if (loading) {
     return (
@@ -43,11 +40,6 @@ const AppRouter = () => {
     return (
       <AuthView
         onComplete={() => {
-          localStorage.removeItem('skipped_auth');
-          setStep('app');
-        }}
-        onSkip={() => {
-          localStorage.setItem('skipped_auth', 'true');
           setStep('app');
         }}
       />

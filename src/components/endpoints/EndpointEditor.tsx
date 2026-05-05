@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { motion } from 'framer-motion';
 import {
@@ -8,6 +8,7 @@ import {
   Edit3,
   X,
   Radio,
+  Layers,
 } from 'lucide-react';
 import type { Endpoint, ResponseConfig, HttpCodeConfig, SeparatorType, ParsedData } from '../../types';
 import { parsedDataToJson, buildResponse } from '../../lib/parser';
@@ -33,6 +34,11 @@ interface FormValues {
   slug: string;
   description: string;
   rootKey: string;
+  enablePagination: boolean;
+  pageParam: string;
+  limitParam: string;
+  defaultLimit: number;
+  dataKey: string;
 }
 
 const getBaseJsonForCode = (code: number, baseData: any): any => {
@@ -93,6 +99,13 @@ export const EndpointEditor = ({
   const [showPreview, setShowPreview] = useState(false);
   const [editingCode, setEditingCode] = useState<number | null>(null);
   const [modalText, setModalText] = useState('');
+  const lineNumbersRef = useRef<HTMLDivElement>(null);
+
+  const handleScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
+    if (lineNumbersRef.current) {
+      lineNumbersRef.current.scrollTop = e.currentTarget.scrollTop;
+    }
+  };
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm<FormValues>({
     defaultValues: {
@@ -100,12 +113,18 @@ export const EndpointEditor = ({
       slug: endpoint?.slug || '',
       description: endpoint?.description || '',
       rootKey: endpoint?.responseConfig?.rootKey || initialRootKey,
+      enablePagination: endpoint?.responseConfig?.pagination?.enabled || false,
+      pageParam: endpoint?.responseConfig?.pagination?.pageParam || 'page',
+      limitParam: endpoint?.responseConfig?.pagination?.limitParam || 'limit',
+      defaultLimit: endpoint?.responseConfig?.pagination?.defaultLimit || 10,
+      dataKey: endpoint?.responseConfig?.pagination?.dataKey || 'data',
     },
   });
 
   const watchName = watch('name');
   const watchSlug = watch('slug');
   const watchRootKey = watch('rootKey');
+  const watchPagination = watch('enablePagination');
 
   useEffect(() => {
     if (!endpoint && watchName && !watchSlug) {
@@ -188,7 +207,21 @@ export const EndpointEditor = ({
   };
 
   const getPreviewResponse = () => {
-    const data = getEffectiveData(activeCode);
+    let data = getEffectiveData(activeCode);
+    
+    if (watchPagination && Array.isArray(data)) {
+      // Simulate pagination wrapper for preview
+      const total = data.length;
+      const limit = watch('defaultLimit') || 10;
+      data = {
+        pageNumber: 1,
+        pageSize: limit,
+        totalRecords: total,
+        totalPages: Math.ceil(total / limit),
+        [watch('dataKey') || 'data']: data.slice(0, limit)
+      };
+    }
+    
     return buildResponse(data, activeCode);
   };
 
@@ -212,6 +245,13 @@ export const EndpointEditor = ({
       data: resolvedBase,
       separator,
       headers: {},
+      pagination: data.enablePagination ? {
+        enabled: true,
+        pageParam: data.pageParam,
+        limitParam: data.limitParam,
+        defaultLimit: Number(data.defaultLimit),
+        dataKey: data.dataKey,
+      } : undefined,
     };
 
     onSave({
@@ -248,7 +288,7 @@ export const EndpointEditor = ({
           </h3>
 
           <div className="space-y-4">
-            <div className="flex gap-3">
+            <div className="flex flex-col md:flex-row gap-3">
               <div className="flex-1">
                 <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Name</label>
                 <input
@@ -262,7 +302,7 @@ export const EndpointEditor = ({
                 <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1.5">Slug</label>
                 <div className="flex bg-surface-900 border border-[var(--border-color)] rounded-lg overflow-hidden focus-within:border-accent-500 focus-within:ring-1 focus-within:ring-accent-500 transition-all">
                   {collectionAlias && (
-                    <div className="px-3 flex items-center bg-surface-800 text-[var(--text-muted)] text-xs border-r border-[var(--border-color)]">
+                    <div className="px-2 md:px-3 flex items-center bg-surface-800 text-[var(--text-muted)] text-[10px] md:text-xs border-r border-[var(--border-color)] whitespace-nowrap">
                       /e/{collectionAlias}/
                     </div>
                   )}
@@ -291,9 +331,59 @@ export const EndpointEditor = ({
                 {...register('rootKey')}
                 className="glass-input font-mono"
                 placeholder="e.g. users (leave empty for array root)"
+                disabled={watchPagination}
               />
+              {watchPagination && <p className="text-[10px] text-[var(--text-muted)] mt-1">Root Key is ignored when pagination is enabled.</p>}
             </div>
           </div>
+        </div>
+
+        <div className="glass-card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+              <Layers className="w-4 h-4 text-accent-400" />
+              Pagination Settings
+            </h3>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <span className="text-xs text-[var(--text-muted)]">Enable Pagination</span>
+              <input
+                type="checkbox"
+                {...register('enablePagination')}
+                className="rounded border-[var(--border-color)] bg-[var(--bg-glass)] text-accent-500 focus:ring-accent-500"
+              />
+            </label>
+          </div>
+
+          {watchPagination && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              className="space-y-4 pt-2 border-t border-[var(--border-color)] mt-4"
+            >
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-[10px] font-medium text-[var(--text-secondary)] mb-1">Page Param Name</label>
+                  <input {...register('pageParam')} className="glass-input text-xs font-mono" placeholder="e.g. page" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-medium text-[var(--text-secondary)] mb-1">Limit Param Name</label>
+                  <input {...register('limitParam')} className="glass-input text-xs font-mono" placeholder="e.g. limit" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-medium text-[var(--text-secondary)] mb-1">Default Limit</label>
+                  <input type="number" {...register('defaultLimit')} className="glass-input text-xs font-mono" placeholder="10" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-medium text-[var(--text-secondary)] mb-1">Data Key</label>
+                  <input {...register('dataKey')} className="glass-input text-xs font-mono" placeholder="data" />
+                </div>
+              </div>
+              <p className="text-[10px] text-[var(--text-muted)] leading-relaxed">
+                When enabled, the endpoint will look for <code>?{watch('pageParam') || 'page'}=1&{watch('limitParam') || 'limit'}=10</code> in the URL.
+                It will automatically slice your array data and return a wrapped JSON containing <code className="text-[var(--text-secondary)]">pageNumber, pageSize, totalRecords, totalPages</code> and your array inside <code className="text-[var(--text-secondary)]">"{watch('dataKey') || 'data'}"</code>.
+              </p>
+            </motion.div>
+          )}
         </div>
 
         <div className="glass-card p-5">
@@ -411,8 +501,11 @@ export const EndpointEditor = ({
       >
         <div className="space-y-4">
           <div className="relative">
-            <div className="flex rounded-lg overflow-hidden border border-[var(--border-color)] bg-surface-950/50">
-              <div className="py-3 px-2 text-right select-none border-r border-[var(--border-color)] bg-[var(--bg-glass)] overflow-hidden min-w-[3rem]">
+            <div className="flex rounded-lg border border-[var(--border-color)] bg-surface-950/50">
+              <div 
+                ref={lineNumbersRef}
+                className="py-3 px-2 text-right select-none border-r border-[var(--border-color)] bg-[var(--bg-glass)] overflow-hidden min-w-[3rem] max-h-[50vh]"
+              >
                 {modalText.split('\n').map((_, i) => (
                   <div key={i} className="text-[11px] leading-[1.6] font-mono text-[var(--text-muted)] pr-1">
                     {i + 1}
@@ -422,9 +515,11 @@ export const EndpointEditor = ({
               <textarea
                 value={modalText}
                 onChange={(e) => setModalText(e.target.value)}
-                className="flex-1 bg-transparent p-3 font-mono text-xs leading-[1.6] text-[var(--text-primary)] resize-none outline-none min-h-[200px] max-h-[50vh] scrollbar-thin"
+                onScroll={handleScroll}
+                className="flex-1 bg-transparent p-3 font-mono text-xs leading-[1.6] text-[var(--text-primary)] resize-none outline-none min-h-[200px] max-h-[50vh] scrollbar-thin whitespace-pre"
                 spellCheck={false}
                 placeholder="Enter JSON data..."
+                wrap="off"
               />
             </div>
           </div>

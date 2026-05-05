@@ -166,6 +166,46 @@ app.get('/e/:alias/:slug', async (req: Request, res: Response) => {
       }
     }
 
+    // Apply pagination if enabled
+    if (responseConfig.pagination?.enabled && responseData) {
+      const pag = responseConfig.pagination;
+      const dataKey = pag.dataKey || 'data';
+      
+      let sourceArray = null;
+      
+      if (Array.isArray(responseData)) {
+        sourceArray = responseData;
+      } else if (typeof responseData === 'object') {
+        if (Array.isArray(responseData[dataKey])) {
+          sourceArray = responseData[dataKey];
+        } else {
+          // Find the first top-level array property if any
+          const firstArray = Object.values(responseData).find(val => Array.isArray(val));
+          if (firstArray) {
+            sourceArray = firstArray;
+          }
+        }
+      }
+      
+      if (sourceArray) {
+        const page = parseInt(req.query[pag.pageParam] as string) || 1;
+        const limit = parseInt(req.query[pag.limitParam] as string) || pag.defaultLimit || 10;
+        const total = sourceArray.length;
+        
+        const startIndex = (page - 1) * limit;
+        const endIndex = startIndex + limit;
+        const sliced = sourceArray.slice(startIndex, endIndex);
+        
+        responseData = {
+          pageNumber: page,
+          pageSize: limit,
+          totalRecords: total,
+          totalPages: Math.ceil(total / limit),
+          [dataKey]: sliced
+        };
+      }
+    }
+
     // Set response headers if configured
     if (responseConfig.headers) {
       Object.entries(responseConfig.headers).forEach(([key, value]) => {

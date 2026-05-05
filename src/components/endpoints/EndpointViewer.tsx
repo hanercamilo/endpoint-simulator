@@ -35,6 +35,42 @@ export const EndpointViewer = () => {
     if (typeof data === 'string') {
       try { data = JSON.parse(data); } catch { /* keep as string */ }
     }
+
+    // Apply pagination wrapper for viewer (defaults to page 1)
+    if (endpoint.responseConfig.pagination?.enabled && data) {
+      const pag = endpoint.responseConfig.pagination;
+      const dataKey = pag.dataKey || 'data';
+      
+      let sourceArray = null;
+      
+      if (Array.isArray(data)) {
+        sourceArray = data;
+      } else if (typeof data === 'object') {
+        if (Array.isArray(data[dataKey])) {
+          sourceArray = data[dataKey];
+        } else {
+          // Find the first top-level array property if any
+          const firstArray = Object.values(data).find(val => Array.isArray(val));
+          if (firstArray) {
+            sourceArray = firstArray;
+          }
+        }
+      }
+      
+      if (sourceArray) {
+        const limit = pag.defaultLimit || 10;
+        const total = sourceArray.length;
+        
+        data = {
+          pageNumber: 1,
+          pageSize: limit,
+          totalRecords: total,
+          totalPages: Math.ceil(total / limit),
+          [dataKey]: sourceArray.slice(0, limit)
+        };
+      }
+    }
+
     return buildResponse(data, code);
   };
 

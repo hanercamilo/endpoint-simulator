@@ -12,6 +12,7 @@ import {
   Download,
   Upload,
   Trash2,
+  X,
 } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../hooks/useAuth';
@@ -25,6 +26,8 @@ interface SidebarProps {
   onExportProject: () => void;
   onImportProject: () => void;
   onClearData: () => void;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
 export const Sidebar = ({
@@ -35,24 +38,50 @@ export const Sidebar = ({
   onExportProject,
   onImportProject,
   onClearData,
+  isOpen,
+  onClose,
 }: SidebarProps) => {
   const { theme, toggleTheme } = useTheme();
   const { user, signOut } = useAuth();
   const [showMore, setShowMore] = useState(false);
 
   return (
-    <aside className="w-64 h-screen flex flex-col glass border-r border-[var(--border-color)] shrink-0">
-      <div className="p-5 border-b border-[var(--border-color)]">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent-400 to-accent-600 flex items-center justify-center">
-            <Server className="w-4 h-4 text-white" />
+    <>
+      {/* Mobile Backdrop */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm"
+          />
+        )}
+      </AnimatePresence>
+
+      <aside 
+        className={`fixed md:sticky top-0 left-0 z-50 w-64 h-screen flex flex-col glass border-r border-[var(--border-color)] shrink-0 transition-transform duration-300 ease-in-out md:translate-x-0 ${
+          isOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="p-5 border-b border-[var(--border-color)] flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent-400 to-accent-600 flex items-center justify-center">
+              <Server className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h1 className="text-sm font-semibold text-[var(--text-primary)]">EndpointSim</h1>
+              <p className="text-[11px] text-[var(--text-muted)]">Dynamic API Simulator</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-sm font-semibold text-[var(--text-primary)]">EndpointSim</h1>
-            <p className="text-[11px] text-[var(--text-muted)]">Dynamic API Simulator</p>
-          </div>
+          <button 
+            onClick={onClose}
+            className="md:hidden p-1.5 rounded-lg hover:bg-[var(--border-color)] text-[var(--text-muted)] transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
-      </div>
 
       <div className="p-3">
         <button
@@ -76,7 +105,10 @@ export const Sidebar = ({
         {collections.map(col => (
           <button
             key={col.id}
-            onClick={() => onSelectCollection(col.id)}
+            onClick={() => {
+              onSelectCollection(col.id);
+              if (window.innerWidth < 768) onClose();
+            }}
             className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all group ${
               activeCollectionId === col.id
                 ? 'bg-accent-500/10 text-accent-400'
@@ -125,7 +157,6 @@ export const Sidebar = ({
           ) : (
             <button
               onClick={() => {
-                localStorage.removeItem('skipped_auth');
                 window.location.reload();
               }}
               className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-medium text-[var(--text-secondary)] hover:text-accent-400 hover:bg-[var(--border-color)] transition-colors"
@@ -169,5 +200,6 @@ export const Sidebar = ({
         </AnimatePresence>
       </div>
     </aside>
+    </>
   );
 };

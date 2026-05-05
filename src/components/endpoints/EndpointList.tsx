@@ -37,7 +37,7 @@ export const EndpointList = ({ collectionAlias, endpoints, onEdit, onDelete }: E
             <h4 className="text-sm font-medium text-[var(--text-primary)] truncate">{ep.name}</h4>
             <p className="text-xs text-[var(--text-muted)] font-mono truncate">/e/{collectionAlias}/{ep.slug}</p>
           </div>
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
             <a
               href={`/e/${collectionAlias}/${ep.slug}`}
               target="_blank"

@@ -7,6 +7,7 @@ import {
   Trash2,
   Edit2,
   Download,
+  Menu,
 } from 'lucide-react';
 import { Sidebar } from '../components/layout/Sidebar';
 import { DataImport } from '../components/data-import/DataImport';
@@ -55,6 +56,7 @@ export const Dashboard = () => {
 
   const [showCollectionModal, setShowCollectionModal] = useState(false);
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const activeCollection = collections.find(c => c.id === activeCollectionId);
   const collectionEndpoints = endpoints.filter(e => e.collectionId === activeCollectionId);
@@ -335,10 +337,28 @@ export const Dashboard = () => {
         onExportProject={handleExportProject}
         onImportProject={handleImportProject}
         onClearData={handleClearData}
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
       />
 
-      <main className="flex-1 overflow-y-auto scrollbar-thin">
-        <div className="max-w-4xl mx-auto p-6">
+      <main className="flex-1 overflow-y-auto scrollbar-thin flex flex-col">
+        {/* Mobile Header */}
+        <div className="md:hidden flex items-center justify-between p-4 border-b border-[var(--border-color)] bg-[var(--bg-glass)] backdrop-blur-md sticky top-0 z-30">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent-400 to-accent-600 flex items-center justify-center">
+              <Server className="w-4 h-4 text-white" />
+            </div>
+            <h1 className="text-sm font-semibold text-[var(--text-primary)]">EndpointSim</h1>
+          </div>
+          <button 
+            onClick={() => setIsSidebarOpen(true)}
+            className="p-2 rounded-lg hover:bg-[var(--border-color)] text-[var(--text-muted)] transition-colors"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="flex-1 max-w-4xl w-full mx-auto p-4 md:p-6">
           <AnimatePresence mode="wait">
             {view === 'dashboard' && (
               <motion.div

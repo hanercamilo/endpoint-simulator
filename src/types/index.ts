@@ -25,6 +25,15 @@ export interface ResponseConfig {
   data: any;
   separator: SeparatorType;
   headers: Record<string, string>;
+  pagination?: PaginationConfig;
+}
+
+export interface PaginationConfig {
+  enabled: boolean;
+  pageParam: string;
+  limitParam: string;
+  defaultLimit: number;
+  dataKey: string;
 }
 
 export interface HttpCodeConfig {

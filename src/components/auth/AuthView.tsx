@@ -11,10 +11,9 @@ interface AuthFormValues {
 
 interface AuthViewProps {
   onComplete: () => void;
-  onSkip: () => void;
 }
 
-export const AuthView = ({ onComplete, onSkip }: AuthViewProps) => {
+export const AuthView = ({ onComplete }: AuthViewProps) => {
   const [isLogin, setIsLogin] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { signIn, signUp } = useAuth();
@@ -112,14 +111,6 @@ export const AuthView = ({ onComplete, onSkip }: AuthViewProps) => {
           </button>
         </div>
 
-        <div className="mt-3 text-center">
-          <button
-            onClick={onSkip}
-            className="text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
-          >
-            Skip - Use offline mode
-          </button>
-        </div>
       </motion.div>
     </div>
   );
