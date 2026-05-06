@@ -108,7 +108,12 @@ export const EndpointRaw = () => {
         }
       }
 
-      const response = buildResponse(data, code);
+      let response;
+      if (config?.useRawResponse) {
+        response = data;
+      } else {
+        response = buildResponse(data, code);
+      }
       setJson(JSON.stringify(response, null, 2));
     };
     load();

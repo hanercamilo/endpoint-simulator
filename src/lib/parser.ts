@@ -52,7 +52,7 @@ export const buildResponse = (
   return {
     status: isSuccess,
     data,
-    error: isSuccess ? [] : [{ code: httpCode, message: getHttpMessage(httpCode) }],
+    errors: isSuccess ? null : [{ code: httpCode, message: getHttpMessage(httpCode) }],
   };
 };
 

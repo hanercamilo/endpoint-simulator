@@ -98,7 +98,7 @@ const buildResponse = (data: any, httpCode: number) => {
   return {
     status: isSuccess,
     data,
-    error: isSuccess ? [] : [{ code: httpCode, message: getHttpMessage(httpCode) }],
+    errors: isSuccess ? null : [{ code: httpCode, message: getHttpMessage(httpCode) }],
   };
 };
 
@@ -252,7 +252,12 @@ app.get('/e/:alias/:slug', async (req: Request, res: Response) => {
     res.setHeader('Content-Type', 'application/json');
 
     // Build and send response
-    const response = buildResponse(responseData, code);
+    let response;
+    if (config?.useRawResponse) {
+      response = responseData;
+    } else {
+      response = buildResponse(responseData, code);
+    }
     res.status(code).json(response);
 
     console.log(`Endpoint served: ${alias}/${slug} (${code})`);

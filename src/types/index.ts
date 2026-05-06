@@ -45,6 +45,7 @@ export interface HttpCodeConfig {
   code: number;
   enabled: boolean;
   data: any;
+  useRawResponse?: boolean;
 }
 
 export type SeparatorType = ',' | '|' | ';' | 'tab' | 'custom';

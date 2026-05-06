@@ -100,6 +100,7 @@ export const EndpointEditor = ({
   const [showPreview, setShowPreview] = useState(false);
   const [editingCode, setEditingCode] = useState<number | null>(null);
   const [modalText, setModalText] = useState('');
+  const [modalUseRaw, setModalUseRaw] = useState(false);
   const lineNumbersRef = useRef<HTMLDivElement>(null);
 
   const handleScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
@@ -164,10 +165,10 @@ export const EndpointEditor = ({
     setActiveCode(code);
   };
 
-  const updateHttpCodeData = (code: number, data: string) => {
+  const updateHttpCodeConfig = (code: number, updates: Partial<HttpCodeConfig>) => {
     setHttpConfigs(prev =>
       prev.map(c =>
-        c.code === code ? { ...c, data } : c
+        c.code === code ? { ...c, ...updates } : c
       )
     );
   };
@@ -184,13 +185,14 @@ export const EndpointEditor = ({
       currentData = JSON.stringify(withRootKey, null, 2);
     }
     setModalText(tryFormatJson(currentData));
+    setModalUseRaw(config?.useRawResponse || false);
     setEditingCode(code);
   };
 
   const saveModalEdit = () => {
     if (editingCode !== null) {
       const formatted = tryFormatJson(modalText);
-      updateHttpCodeData(editingCode, formatted);
+      updateHttpCodeConfig(editingCode, { data: formatted, useRawResponse: modalUseRaw });
       setEditingCode(null);
     }
   };
@@ -223,6 +225,9 @@ export const EndpointEditor = ({
         [watch('dataKey') || 'data']: data.slice(0, limit)
       };
     }
+    
+    const config = httpConfigs.find(c => c.code === activeCode);
+    if (config?.useRawResponse) return data;
     
     return buildResponse(data, activeCode);
   };
@@ -559,7 +564,17 @@ export const EndpointEditor = ({
             <p className="text-[11px] text-[var(--text-muted)]">
               {modalText.split('\n').length} lines
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 cursor-pointer border-r border-[var(--border-color)] pr-4">
+                <span className="text-[11px] text-[var(--text-muted)]">Bypass Wrapper</span>
+                <input
+                  type="checkbox"
+                  checked={modalUseRaw}
+                  onChange={(e) => setModalUseRaw(e.target.checked)}
+                  className="rounded border-[var(--border-color)] bg-[var(--bg-glass)] text-accent-500 focus:ring-accent-500 w-3 h-3"
+                  title="If enabled, the response will be EXACTLY this JSON, without the {status, data, error} wrapper."
+                />
+              </label>
               <button
                 type="button"
                 onClick={() => setModalText(tryFormatJson(modalText))}
