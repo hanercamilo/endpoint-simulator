@@ -15,6 +15,7 @@ import { EndpointEditor } from '../components/endpoints/EndpointEditor';
 import { EndpointList } from '../components/endpoints/EndpointList';
 import { CollectionForm } from '../components/collections/CollectionForm';
 import { Modal } from '../components/common/Modal';
+import { ConfirmModal } from '../components/common/ConfirmModal';
 import { useAuth } from '../hooks/useAuth';
 import { db, clearLocalData } from '../lib/db';
 import { getSupabase } from '../lib/supabase';
@@ -57,6 +58,8 @@ export const Dashboard = () => {
   const [showCollectionModal, setShowCollectionModal] = useState(false);
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [pendingDeleteCollectionId, setPendingDeleteCollectionId] = useState<string | null>(null);
+  const pendingDeleteCollection = collections.find(c => c.id === pendingDeleteCollectionId);
 
   const activeCollection = collections.find(c => c.id === activeCollectionId);
   const collectionEndpoints = endpoints.filter(e => e.collectionId === activeCollectionId);
@@ -410,7 +413,7 @@ export const Dashboard = () => {
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => handleDeleteCollection(activeCollection.id)}
+                          onClick={() => setPendingDeleteCollectionId(activeCollection.id)}
                           className="p-2 rounded-lg hover:bg-danger-500/10 transition-colors text-danger-400"
                           title="Delete collection"
                         >
@@ -506,6 +509,19 @@ export const Dashboard = () => {
           initial={editingCollection || undefined}
         />
       </Modal>
+
+      <ConfirmModal
+        open={pendingDeleteCollectionId !== null}
+        title="¿Eliminar colección?"
+        description={pendingDeleteCollection ? `Se eliminará "${pendingDeleteCollection.name}" junto con todos sus endpoints de forma permanente. Esta acción no se puede deshacer.` : undefined}
+        confirmLabel="Eliminar"
+        cancelLabel="Cancelar"
+        onConfirm={() => {
+          if (pendingDeleteCollectionId) handleDeleteCollection(pendingDeleteCollectionId);
+          setPendingDeleteCollectionId(null);
+        }}
+        onCancel={() => setPendingDeleteCollectionId(null)}
+      />
     </div>
   );
 };
