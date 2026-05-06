@@ -26,6 +26,11 @@ export interface ResponseConfig {
   separator: SeparatorType;
   headers: Record<string, string>;
   pagination?: PaginationConfig;
+  filtering?: FilterConfig;
+}
+
+export interface FilterConfig {
+  enabled: boolean;
 }
 
 export interface PaginationConfig {

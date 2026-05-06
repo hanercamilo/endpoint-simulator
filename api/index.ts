@@ -166,43 +166,78 @@ app.get('/e/:alias/:slug', async (req: Request, res: Response) => {
       }
     }
 
-    // Apply pagination if enabled
-    if (responseConfig.pagination?.enabled && responseData) {
+    // Check if filtering or pagination is enabled
+    const hasFiltering = responseConfig.filtering?.enabled;
+    const hasPagination = responseConfig.pagination?.enabled;
+
+    if ((hasFiltering || hasPagination) && responseData) {
       const pag = responseConfig.pagination;
-      const dataKey = pag.dataKey || 'data';
+      const dataKey = pag?.dataKey || 'data';
       
       let sourceArray = null;
+      let sourceArrayKey = null;
       
       if (Array.isArray(responseData)) {
         sourceArray = responseData;
       } else if (typeof responseData === 'object') {
         if (Array.isArray(responseData[dataKey])) {
           sourceArray = responseData[dataKey];
+          sourceArrayKey = dataKey;
         } else {
           // Find the first top-level array property if any
-          const firstArray = Object.values(responseData).find(val => Array.isArray(val));
-          if (firstArray) {
-            sourceArray = firstArray;
+          const firstArrayEntry = Object.entries(responseData).find(entry => Array.isArray(entry[1]));
+          if (firstArrayEntry) {
+            sourceArray = firstArrayEntry[1] as any[];
+            sourceArrayKey = firstArrayEntry[0];
           }
         }
       }
       
       if (sourceArray) {
-        const page = parseInt(req.query[pag.pageParam] as string) || 1;
-        const limit = parseInt(req.query[pag.limitParam] as string) || pag.defaultLimit || 10;
-        const total = sourceArray.length;
-        
-        const startIndex = (page - 1) * limit;
-        const endIndex = startIndex + limit;
-        const sliced = sourceArray.slice(startIndex, endIndex);
-        
-        responseData = {
-          pageNumber: page,
-          pageSize: limit,
-          totalRecords: total,
-          totalPages: Math.ceil(total / limit),
-          [dataKey]: sliced
-        };
+        // Apply Filtering
+        if (hasFiltering) {
+          const excludedKeys: string[] = [];
+          if (hasPagination && pag) {
+            excludedKeys.push(pag.pageParam, pag.limitParam);
+          }
+          const filterKeys = Object.keys(req.query).filter(k => !excludedKeys.includes(k));
+          
+          if (filterKeys.length > 0) {
+            sourceArray = sourceArray.filter(item => {
+              return filterKeys.every(k => {
+                return String(item[k]) === String(req.query[k]);
+              });
+            });
+          }
+          
+          // If no pagination will wrap it, we must update the data structure
+          if (!hasPagination) {
+            if (Array.isArray(responseData)) {
+              responseData = sourceArray;
+            } else if (sourceArrayKey) {
+              responseData = { ...responseData, [sourceArrayKey]: sourceArray };
+            }
+          }
+        }
+
+        // Apply Pagination
+        if (hasPagination && pag) {
+          const page = parseInt(req.query[pag.pageParam] as string) || 1;
+          const limit = parseInt(req.query[pag.limitParam] as string) || pag.defaultLimit || 10;
+          const total = sourceArray.length;
+          
+          const startIndex = (page - 1) * limit;
+          const endIndex = startIndex + limit;
+          const sliced = sourceArray.slice(startIndex, endIndex);
+          
+          responseData = {
+            pageNumber: page,
+            pageSize: limit,
+            totalRecords: total,
+            totalPages: Math.ceil(total / limit),
+            [dataKey]: sliced
+          };
+        }
       }
     }
 

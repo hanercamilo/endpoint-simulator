@@ -39,6 +39,7 @@ interface FormValues {
   limitParam: string;
   defaultLimit: number;
   dataKey: string;
+  enableFiltering: boolean;
 }
 
 const getBaseJsonForCode = (code: number, baseData: any): any => {
@@ -118,6 +119,7 @@ export const EndpointEditor = ({
       limitParam: endpoint?.responseConfig?.pagination?.limitParam || 'limit',
       defaultLimit: endpoint?.responseConfig?.pagination?.defaultLimit || 10,
       dataKey: endpoint?.responseConfig?.pagination?.dataKey || 'data',
+      enableFiltering: endpoint?.responseConfig?.filtering?.enabled || false,
     },
   });
 
@@ -252,6 +254,9 @@ export const EndpointEditor = ({
         defaultLimit: Number(data.defaultLimit),
         dataKey: data.dataKey,
       } : undefined,
+      filtering: data.enableFiltering ? {
+        enabled: true
+      } : undefined,
     };
 
     onSave({
@@ -381,6 +386,33 @@ export const EndpointEditor = ({
               <p className="text-[10px] text-[var(--text-muted)] leading-relaxed">
                 When enabled, the endpoint will look for <code>?{watch('pageParam') || 'page'}=1&{watch('limitParam') || 'limit'}=10</code> in the URL.
                 It will automatically slice your array data and return a wrapped JSON containing <code className="text-[var(--text-secondary)]">pageNumber, pageSize, totalRecords, totalPages</code> and your array inside <code className="text-[var(--text-secondary)]">"{watch('dataKey') || 'data'}"</code>.
+              </p>
+            </motion.div>
+          )}
+
+          <div className="flex items-center justify-between mt-6 mb-4">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+              <Layers className="w-4 h-4 text-accent-400" />
+              Dynamic Filtering
+            </h3>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <span className="text-xs text-[var(--text-muted)]">Enable Filtering</span>
+              <input
+                type="checkbox"
+                {...register('enableFiltering')}
+                className="rounded border-[var(--border-color)] bg-[var(--bg-glass)] text-accent-500 focus:ring-accent-500"
+              />
+            </label>
+          </div>
+          
+          {watch('enableFiltering') && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              className="space-y-4 pt-2 border-t border-[var(--border-color)] mt-4"
+            >
+              <p className="text-[10px] text-[var(--text-muted)] leading-relaxed">
+                When enabled, the endpoint will read any extra query parameters in the URL and use them to filter your array data. For example, <code>?codigoAuxiliar=IP20</code> will return only the items where <code>codigoAuxiliar</code> exactly matches <code>IP20</code>.
               </p>
             </motion.div>
           )}
