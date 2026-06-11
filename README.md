@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Endpoint Simulator Logo](public/vite.svg)
+![Endpoint Simulator Logo](public/favicon.svg)
 
 **Simulador profesional de endpoints API con editor de respuestas JSON, configuración de códigos HTTP, sincronización en la nube con Supabase y servidor Express local. Construido con React, Express y TypeScript para máxima productividad.**
 
