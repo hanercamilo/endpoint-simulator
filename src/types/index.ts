@@ -14,6 +14,7 @@ export interface Endpoint {
   name: string;
   slug: string;
   description: string;
+  sortOrder?: number;
   responseConfig: ResponseConfig;
   createdAt: string;
   updatedAt: string;

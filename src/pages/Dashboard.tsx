@@ -38,6 +38,7 @@ interface SbEndpoint {
   name: string;
   slug: string;
   description: string;
+  sort_order?: number;
   response_config: Endpoint['responseConfig'];
   created_at: string;
   updated_at: string;
@@ -71,7 +72,14 @@ export const Dashboard = () => {
     const cols = allCols.filter(c => c.userId === currentUserId);
     const colIds = new Set(cols.map(c => c.id));
     const allEps = await db.endpoints.toArray();
-    const eps = allEps.filter(e => colIds.has(e.collectionId));
+    const eps = allEps
+      .filter(e => colIds.has(e.collectionId))
+      .sort((a, b) => {
+        const orderA = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+        const orderB = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.createdAt.localeCompare(b.createdAt);
+      });
 
     setCollections(cols);
     setEndpoints(eps);
@@ -127,7 +135,9 @@ export const Dashboard = () => {
       const { data: sbEps, error: epsError } = await (supabase as any)
         .from('endpoints')
         .select('*')
-        .in('collection_id', mapped.map(c => c.id));
+        .in('collection_id', mapped.map(c => c.id))
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true });
 
       if (!epsError && sbEps) {
         mappedEps = (sbEps as SbEndpoint[]).map(e => ({
@@ -136,6 +146,7 @@ export const Dashboard = () => {
           name: e.name,
           slug: e.slug,
           description: e.description || '',
+          sortOrder: e.sort_order ?? 0,
           responseConfig: e.response_config || { rootKey: '', httpCodes: [], data: null, separator: ',', headers: {} },
           createdAt: e.created_at,
           updatedAt: e.updated_at,
@@ -196,6 +207,7 @@ export const Dashboard = () => {
       name: ep.name,
       slug: ep.slug,
       description: ep.description,
+      sort_order: ep.sortOrder ?? 0,
       response_config: ep.responseConfig,
       updated_at: ep.updatedAt,
     });
@@ -270,9 +282,11 @@ export const Dashboard = () => {
 
   const handleSaveEndpoint = async (data: Omit<Endpoint, 'id' | 'createdAt' | 'updatedAt'>) => {
     const now = new Date().toISOString();
+    const maxOrder = collectionEndpoints.reduce((max, e, idx) => Math.max(max, e.sortOrder ?? idx), -1);
     const ep: Endpoint = {
       ...data,
       id: crypto.randomUUID(),
+      sortOrder: maxOrder + 1,
       createdAt: now,
       updatedAt: now,
     };
@@ -313,6 +327,43 @@ export const Dashboard = () => {
     await db.endpoints.delete(id);
     await deleteFromSupabase('endpoints', id);
     await loadLocalData();
+  };
+
+  const handleReorderEndpoints = async (orderedIds: string[]) => {
+    const orderMap = new Map(orderedIds.map((id, index) => [id, index]));
+    const updatedForDb: Endpoint[] = [];
+
+    setEndpoints(prev => {
+      const next = prev.map(ep => {
+        const newOrder = orderMap.get(ep.id);
+        if (newOrder === undefined) return ep;
+        const updated = { ...ep, sortOrder: newOrder };
+        updatedForDb.push(updated);
+        return updated;
+      });
+      return [...next].sort((a, b) => {
+        const orderA = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+        const orderB = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.createdAt.localeCompare(b.createdAt);
+      });
+    });
+
+    if (updatedForDb.length > 0) {
+      await db.endpoints.bulkPut(updatedForDb);
+      const supabase = getSupabase();
+      if (supabase && user) {
+        await Promise.all(
+          updatedForDb.map(ep =>
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (supabase as any)
+              .from('endpoints')
+              .update({ sort_order: ep.sortOrder ?? 0 })
+              .eq('id', ep.id)
+          )
+        );
+      }
+    }
   };
 
   const handleEditEndpoint = (ep: Endpoint) => {
@@ -525,6 +576,7 @@ export const Dashboard = () => {
                       endpoints={collectionEndpoints}
                       onEdit={handleEditEndpoint}
                       onDelete={handleDeleteEndpoint}
+                      onReorder={handleReorderEndpoints}
                     />
                   </div>
                 )}
