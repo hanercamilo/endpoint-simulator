@@ -1,6 +1,9 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { motion } from 'framer-motion';
+import CodeMirror from '@uiw/react-codemirror';
+import { json } from '@codemirror/lang-json';
+import { oneDark } from '@codemirror/theme-one-dark';
 import {
   Globe,
   Save,
@@ -23,6 +26,8 @@ interface EndpointEditorProps {
   parsedData?: ParsedData;
   separator?: SeparatorType;
   rootKey?: string;
+  formId?: string;
+  onDirtyChange?: (isDirty: boolean) => void;
   onSave: (endpoint: Omit<Endpoint, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onCancel: () => void;
 }
@@ -63,6 +68,8 @@ export const EndpointEditor = ({
   parsedData,
   separator = ',',
   rootKey: initialRootKey = '',
+  formId = 'endpoint-editor-form',
+  onDirtyChange,
   onSave,
   onCancel,
 }: EndpointEditorProps) => {
@@ -98,18 +105,37 @@ export const EndpointEditor = ({
     return enabled?.code || 200;
   });
   const [showPreview, setShowPreview] = useState(false);
+  const [configsDirty, setConfigsDirty] = useState(false);
   const [editingCode, setEditingCode] = useState<number | null>(null);
   const [modalText, setModalText] = useState('');
   const [modalUseRaw, setModalUseRaw] = useState(false);
-  const lineNumbersRef = useRef<HTMLDivElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
 
-  const handleScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
-    if (lineNumbersRef.current) {
-      lineNumbersRef.current.scrollTop = e.currentTarget.scrollTop;
+  const liveJsonError = useMemo(() => {
+    if (!modalText.trim()) return null;
+    try {
+      JSON.parse(modalText);
+      return null;
+    } catch (err) {
+      return err instanceof Error ? err.message : 'Invalid JSON';
+    }
+  }, [modalText]);
+
+  const scrollToPreview = () => {
+    setTimeout(() => {
+      previewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+  };
+
+  const handleTogglePreview = () => {
+    const next = !showPreview;
+    setShowPreview(next);
+    if (next) {
+      scrollToPreview();
     }
   };
 
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<FormValues>({
+  const { register, handleSubmit, watch, formState: { errors, isDirty } } = useForm<FormValues>({
     defaultValues: {
       name: endpoint?.name || '',
       slug: endpoint?.slug || '',
@@ -128,6 +154,16 @@ export const EndpointEditor = ({
   const watchSlug = watch('slug');
   const watchRootKey = watch('rootKey');
   const watchPagination = watch('enablePagination');
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty || configsDirty);
+  }, [isDirty, configsDirty, onDirtyChange]);
+
+  useEffect(() => {
+    return () => {
+      onDirtyChange?.(false);
+    };
+  }, [onDirtyChange]);
 
   useEffect(() => {
     if (!endpoint && watchName && !watchSlug) {
@@ -163,6 +199,7 @@ export const EndpointEditor = ({
       });
     });
     setActiveCode(code);
+    setConfigsDirty(true);
   };
 
   const updateHttpCodeConfig = (code: number, updates: Partial<HttpCodeConfig>) => {
@@ -171,6 +208,7 @@ export const EndpointEditor = ({
         c.code === code ? { ...c, ...updates } : c
       )
     );
+    setConfigsDirty(true);
   };
 
   const openEditor = (code: number) => {
@@ -267,7 +305,7 @@ export const EndpointEditor = ({
     onSave({
       collectionId,
       name: data.name,
-      slug: data.slug,
+      slug: data.slug.replace(/^\/+|\/+$/g, ''),
       description: data.description,
       responseConfig,
     });
@@ -290,7 +328,35 @@ export const EndpointEditor = ({
 
   return (
     <div className="space-y-5">
-      <form onSubmit={handleSubmit(onSubmitForm)} className="space-y-5">
+      <form id={formId} onSubmit={handleSubmit(onSubmitForm)} className="space-y-5">
+        <div className="sticky top-[65px] md:top-2 z-20 glass-card px-4 py-3 flex flex-wrap items-center justify-between gap-3 border border-[var(--border-color)] shadow-lg shadow-black/5 backdrop-blur-md">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold text-[var(--text-primary)] truncate">
+              {endpoint ? `Editing: ${watchName || endpoint.name}` : `New Endpoint${watchName ? `: ${watchName}` : ''}`}
+            </p>
+            <p className="text-[11px] font-mono text-[var(--text-muted)] truncate">
+              {collectionAlias ? `/e/${collectionAlias}/` : '/'}{watchSlug || '...'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button type="button" onClick={onCancel} className="btn-secondary text-xs py-2 px-3">
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleTogglePreview}
+              className={`btn-secondary flex items-center gap-1.5 text-xs py-2 px-3 ${
+                showPreview ? 'border-accent-500/50 text-accent-400 bg-accent-500/10' : ''
+              }`}
+            >
+              <Eye className="w-3.5 h-3.5" /> Preview
+            </button>
+            <button type="submit" className="btn-primary flex items-center gap-1.5 text-xs py-2 px-3.5">
+              <Save className="w-3.5 h-3.5" /> Save Endpoint
+            </button>
+          </div>
+        </div>
+
         <div className="glass-card p-5">
           <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
             <Globe className="w-4 h-4 text-accent-400" />
@@ -317,9 +383,15 @@ export const EndpointEditor = ({
                     </div>
                   )}
                   <input
-                    {...register('slug', { required: 'Required', pattern: { value: /^[a-z0-9-]+$/, message: 'Lowercase, numbers, hyphens' } })}
+                    {...register('slug', {
+                      required: 'Required',
+                      pattern: {
+                        value: /^([a-zA-Z0-9-_]+|\{[a-zA-Z0-9_]+\})(\/([a-zA-Z0-9-_]+|\{[a-zA-Z0-9_]+\}))*$/,
+                        message: 'Letters, numbers, -, _, /, and {param} (e.g. api/Periodos/{periodo}/Lecturas)',
+                      },
+                    })}
                     className="flex-1 bg-transparent px-3 py-2 text-sm text-[var(--text-primary)] font-mono focus:outline-none"
-                    placeholder="get-users"
+                    placeholder="api/Catalogo/municipios"
                   />
                 </div>
                 {errors.slug && <p className="text-xs text-danger-400 mt-1">{errors.slug.message}</p>}
@@ -449,7 +521,7 @@ export const EndpointEditor = ({
                       ? code < 400
                         ? 'border-accent-500/30 bg-accent-500/5 shadow-sm shadow-accent-500/10'
                         : 'border-danger-500/30 bg-danger-500/5 shadow-sm shadow-danger-500/10'
-                      : 'border-[var(--border-color)] bg-[var(--bg-glass)] opacity-50'
+                      : 'border-[var(--border-color)] bg-[var(--bg-secondary)]/60 opacity-80 hover:opacity-100'
                   }`}
                 >
                   <div className="flex items-center gap-3 p-3">
@@ -461,7 +533,7 @@ export const EndpointEditor = ({
                           ? code < 400
                             ? 'bg-accent-500 text-white border border-accent-500 shadow-md shadow-accent-500/30'
                             : 'bg-danger-500 text-white border border-danger-500 shadow-md shadow-danger-500/30'
-                          : 'bg-[var(--bg-glass)] text-[var(--text-muted)] border border-[var(--border-color)] hover:border-[var(--text-muted)]'
+                          : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] border border-[var(--border-color)] hover:border-[var(--text-muted)]'
                       }`}
                     >
                       {code}
@@ -471,52 +543,50 @@ export const EndpointEditor = ({
                     </button>
 
                     <div
-                      className="flex-1 min-w-0 cursor-pointer group"
+                      className="flex-1 min-w-0 cursor-pointer"
                       onClick={() => openEditor(code)}
+                      title="Click to edit response JSON"
                     >
-                      <div className="flex items-center gap-2">
-                        <code className="text-xs text-[var(--text-secondary)] font-mono truncate block flex-1">
-                          {displayJson
-                            ? (isTruncated ? displayJson.slice(0, 120) + '...' : displayJson)
-                            : 'No data configured'}
-                        </code>
-                        <Edit3 className="w-3.5 h-3.5 text-[var(--text-muted)] opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                      </div>
+                      <code className="text-xs text-[var(--text-secondary)] font-mono truncate block">
+                        {displayJson
+                          ? (isTruncated ? displayJson.slice(0, 120) + '...' : displayJson)
+                          : 'No data configured'}
+                      </code>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => { setActiveCode(code); setShowPreview(true); }}
-                      className="p-2 rounded-lg hover:bg-[var(--border-color)] transition-colors text-[var(--text-muted)] shrink-0"
-                      title="Preview this code"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => openEditor(code)}
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-medium border border-[var(--border-color)] bg-[var(--bg-secondary)] hover:border-accent-500/50 hover:text-accent-500 transition-colors text-[var(--text-secondary)] flex items-center gap-1.5"
+                        title={`Edit HTTP ${code} response`}
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        <span>Edit</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setActiveCode(code); setShowPreview(true); scrollToPreview(); }}
+                        className="p-2 rounded-lg border border-transparent hover:border-[var(--border-color)] hover:bg-[var(--border-color)] transition-colors text-[var(--text-secondary)]"
+                        title="Preview this code"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
             })}
           </div>
         </div>
-
-        <div className="flex items-center gap-3">
-          <button type="submit" className="btn-primary flex items-center gap-2">
-            <Save className="w-4 h-4" /> Save Endpoint
-          </button>
-          <button type="button" onClick={() => setShowPreview(!showPreview)} className="btn-secondary flex items-center gap-2">
-            <Eye className="w-4 h-4" /> Preview
-          </button>
-          <button type="button" onClick={onCancel} className="btn-secondary">
-            Cancel
-          </button>
-        </div>
       </form>
 
       {showPreview && (
         <motion.div
+          ref={previewRef}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="glass-card p-5"
+          className="glass-card p-5 scroll-mt-24"
         >
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-[var(--text-primary)]">
@@ -537,35 +607,47 @@ export const EndpointEditor = ({
         maxWidth="max-w-3xl"
       >
         <div className="space-y-4">
-          <div className="relative">
-            <div className="flex rounded-lg border border-slate-800 bg-[#0d1117]">
-              <div 
-                ref={lineNumbersRef}
-                className="py-3 px-2 text-right select-none border-r border-slate-800 bg-[#161b22] overflow-hidden min-w-[3rem] max-h-[50vh]"
-              >
-                {modalText.split('\n').map((_, i) => (
-                  <div key={i} className="text-[11px] leading-[1.6] font-mono text-slate-500 pr-1">
-                    {i + 1}
-                  </div>
-                ))}
-              </div>
-              <textarea
-                value={modalText}
-                onChange={(e) => setModalText(e.target.value)}
-                onScroll={handleScroll}
-                className="flex-1 bg-transparent p-3 font-mono text-xs leading-[1.6] text-[#c9d1d9] resize-none outline-none min-h-[200px] max-h-[50vh] scrollbar-thin whitespace-pre"
-                spellCheck={false}
-                placeholder="Enter JSON data..."
-                wrap="off"
-              />
-            </div>
+          <div className="rounded-lg border border-slate-800 overflow-hidden bg-[#282c34]">
+            <CodeMirror
+              value={modalText}
+              onChange={(value) => setModalText(value)}
+              theme={oneDark}
+              extensions={[json()]}
+              minHeight="240px"
+              maxHeight="50vh"
+              basicSetup={{
+                lineNumbers: true,
+                highlightActiveLineGutter: true,
+                foldGutter: true,
+                bracketMatching: true,
+                closeBrackets: true,
+                autocompletion: true,
+                highlightActiveLine: true,
+                history: true,
+                indentOnInput: true,
+                tabSize: 2,
+              }}
+              className="text-xs font-mono"
+            />
           </div>
-          <div className="flex items-center justify-between">
-            <p className="text-[11px] text-[var(--text-muted)]">
-              {modalText.split('\n').length} lines
-            </p>
-            <div className="flex items-center gap-4">
-              <label className="flex items-center gap-2 cursor-pointer border-r border-[var(--border-color)] pr-4">
+          {liveJsonError && (
+            <div className="px-3 py-2 rounded-lg bg-danger-500/10 border border-danger-500/30 text-danger-400 text-[11px] font-mono">
+              JSON inválido: {liveJsonError}
+            </div>
+          )}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <p className="text-[11px] text-[var(--text-muted)]">
+                {modalText.split('\n').length} lines
+              </p>
+              {!liveJsonError && modalText.trim() && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent-500/10 text-accent-400 font-medium">
+                  Valid JSON
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 cursor-pointer border-r border-[var(--border-color)] pr-3">
                 <span className="text-[11px] text-[var(--text-muted)]">Bypass Wrapper</span>
                 <input
                   type="checkbox"
@@ -578,7 +660,8 @@ export const EndpointEditor = ({
               <button
                 type="button"
                 onClick={() => setModalText(tryFormatJson(modalText))}
-                className="btn-secondary text-xs py-2 px-3"
+                disabled={Boolean(liveJsonError)}
+                className="btn-secondary text-xs py-2 px-3 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Format JSON
               </button>

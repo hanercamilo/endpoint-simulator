@@ -9,7 +9,8 @@ import { JsonViewer } from '../common/JsonViewer';
 import { CopyButton } from '../common/CopyButton';
 
 export const EndpointViewer = () => {
-  const { alias, slug } = useParams<{ alias: string; slug: string }>();
+  const { alias, '*': rawSlug } = useParams<{ alias: string; '*': string }>();
+  const slug = rawSlug?.replace(/^\/+|\/+$/g, '');
   const [endpoint, setEndpoint] = useState<Endpoint | null>(null);
   const [loading, setLoading] = useState(true);
 

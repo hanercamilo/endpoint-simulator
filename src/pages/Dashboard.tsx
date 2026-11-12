@@ -6,7 +6,6 @@ import {
   FolderOpen,
   Trash2,
   Edit2,
-  Download,
   Menu,
 } from 'lucide-react';
 import { Sidebar } from '../components/layout/Sidebar';
@@ -60,53 +59,78 @@ export const Dashboard = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [pendingDeleteCollectionId, setPendingDeleteCollectionId] = useState<string | null>(null);
   const pendingDeleteCollection = collections.find(c => c.id === pendingDeleteCollectionId);
+  const [isEditorDirty, setIsEditorDirty] = useState(false);
+  const [pendingCollectionId, setPendingCollectionId] = useState<string | null>(null);
 
   const activeCollection = collections.find(c => c.id === activeCollectionId);
   const collectionEndpoints = endpoints.filter(e => e.collectionId === activeCollectionId);
 
   const loadLocalData = useCallback(async () => {
-    const cols = await db.collections.toArray();
-    const eps = await db.endpoints.toArray();
+    const currentUserId = user?.id || 'local';
+    const allCols = await db.collections.toArray();
+    const cols = allCols.filter(c => c.userId === currentUserId);
+    const colIds = new Set(cols.map(c => c.id));
+    const allEps = await db.endpoints.toArray();
+    const eps = allEps.filter(e => colIds.has(e.collectionId));
+
     setCollections(cols);
     setEndpoints(eps);
-    if (cols.length > 0 && !activeCollectionId) {
-      setActiveCollectionId(cols[0].id);
-    }
-  }, [activeCollectionId]);
+    setActiveCollectionId(prev => {
+      if (prev && cols.some(c => c.id === prev)) return prev;
+      return cols.length > 0 ? cols[0].id : null;
+    });
+  }, [user?.id]);
 
   const syncFromSupabase = useCallback(async () => {
     const supabase = getSupabase();
     if (!supabase || !user) return;
 
+    const lastUserId = localStorage.getItem('endpointsim_last_user_id');
+    const existingCols = await db.collections.toArray();
+    const hasForeignData = existingCols.some(c => c.userId !== user.id);
+
+    if ((lastUserId && lastUserId !== user.id) || hasForeignData) {
+      await clearLocalData();
+      setCollections([]);
+      setEndpoints([]);
+      setActiveCollectionId(null);
+      setEditingEndpoint(null);
+      setParsedData(null);
+      setView('dashboard');
+    }
+    localStorage.setItem('endpointsim_last_user_id', user.id);
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: sbCols } = await (supabase as any)
+    const { data: sbCols, error: colsError } = await (supabase as any)
       .from('collections')
       .select('*')
       .eq('user_id', user.id);
 
-    if (sbCols && sbCols.length > 0) {
-      const mapped: Collection[] = (sbCols as SbCollection[]).map(c => ({
-        id: c.id,
-        name: c.name,
-        alias: c.alias || c.name.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
-        description: c.description || '',
-        userId: c.user_id,
-        createdAt: c.created_at,
-        updatedAt: c.updated_at,
-      }));
+    if (colsError || !sbCols) {
+      await loadLocalData();
+      return;
+    }
 
-      for (const col of mapped) {
-        await db.collections.put(col);
-      }
+    const mapped: Collection[] = (sbCols as SbCollection[]).map(c => ({
+      id: c.id,
+      name: c.name,
+      alias: c.alias || c.name.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
+      description: c.description || '',
+      userId: c.user_id,
+      createdAt: c.created_at,
+      updatedAt: c.updated_at,
+    }));
 
+    let mappedEps: Endpoint[] = [];
+    if (mapped.length > 0) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: sbEps } = await (supabase as any)
+      const { data: sbEps, error: epsError } = await (supabase as any)
         .from('endpoints')
         .select('*')
         .in('collection_id', mapped.map(c => c.id));
 
-      if (sbEps) {
-        const mappedEps: Endpoint[] = (sbEps as SbEndpoint[]).map(e => ({
+      if (!epsError && sbEps) {
+        mappedEps = (sbEps as SbEndpoint[]).map(e => ({
           id: e.id,
           collectionId: e.collection_id,
           name: e.name,
@@ -116,19 +140,26 @@ export const Dashboard = () => {
           createdAt: e.created_at,
           updatedAt: e.updated_at,
         }));
-
-        for (const ep of mappedEps) {
-          await db.endpoints.put(ep);
-        }
       }
-
-      await loadLocalData();
     }
+
+    await clearLocalData();
+    if (mapped.length > 0) {
+      await db.collections.bulkPut(mapped);
+    }
+    if (mappedEps.length > 0) {
+      await db.endpoints.bulkPut(mappedEps);
+    }
+
+    await loadLocalData();
   }, [user, loadLocalData]);
 
   useEffect(() => {
-    loadLocalData();
-    if (user) syncFromSupabase();
+    if (user) {
+      syncFromSupabase();
+    } else {
+      loadLocalData();
+    }
   }, [user, loadLocalData, syncFromSupabase]);
 
   const saveCollectionToSupabase = async (col: Collection) => {
@@ -250,6 +281,11 @@ export const Dashboard = () => {
     setView('dashboard');
     setParsedData(null);
     setEditingEndpoint(null);
+    setIsEditorDirty(false);
+    if (pendingCollectionId) {
+      setActiveCollectionId(pendingCollectionId);
+      setPendingCollectionId(null);
+    }
     await loadLocalData();
   };
 
@@ -265,6 +301,11 @@ export const Dashboard = () => {
     setView('dashboard');
     setEditingEndpoint(null);
     setParsedData(null);
+    setIsEditorDirty(false);
+    if (pendingCollectionId) {
+      setActiveCollectionId(pendingCollectionId);
+      setPendingCollectionId(null);
+    }
     await loadLocalData();
   };
 
@@ -306,8 +347,9 @@ export const Dashboard = () => {
       try {
         const data: ProjectExport = JSON.parse(text);
         for (const col of data.collections) {
-          await db.collections.put(col);
-          await saveCollectionToSupabase(col);
+          const scopedCol = { ...col, userId: user?.id || 'local' };
+          await db.collections.put(scopedCol);
+          await saveCollectionToSupabase(scopedCol);
         }
         for (const ep of data.endpoints) {
           await db.endpoints.put(ep);
@@ -319,6 +361,53 @@ export const Dashboard = () => {
       }
     };
     input.click();
+  };
+
+  const handleSelectCollection = (colId: string) => {
+    if (view === 'dashboard') {
+      setActiveCollectionId(colId);
+      return;
+    }
+
+    if (view === 'import') {
+      setView('dashboard');
+      setParsedData(null);
+      setActiveCollectionId(colId);
+      return;
+    }
+
+    if (view === 'endpoint-edit' || view === 'endpoint-create') {
+      if (!isEditorDirty) {
+        setEditingEndpoint(null);
+        setParsedData(null);
+        setView('dashboard');
+        setActiveCollectionId(colId);
+      } else {
+        setPendingCollectionId(colId);
+      }
+    }
+  };
+
+  const handleDiscardAndSwitchCollection = () => {
+    if (!pendingCollectionId) return;
+    setEditingEndpoint(null);
+    setParsedData(null);
+    setIsEditorDirty(false);
+    setView('dashboard');
+    setActiveCollectionId(pendingCollectionId);
+    setPendingCollectionId(null);
+  };
+
+  const handleSaveAndSwitchCollection = () => {
+    const form = document.getElementById('endpoint-editor-form') as HTMLFormElement | null;
+    if (form) {
+      form.requestSubmit();
+    }
+    // If validation fails, handleSaveEndpoint/handleUpdateEndpoint won't run;
+    // close the modal so the user can see and fix validation errors.
+    setTimeout(() => {
+      setPendingCollectionId(prev => (prev ? null : prev));
+    }, 50);
   };
 
   const handleClearData = async () => {
@@ -335,7 +424,7 @@ export const Dashboard = () => {
       <Sidebar
         collections={collections}
         activeCollectionId={activeCollectionId}
-        onSelectCollection={setActiveCollectionId}
+        onSelectCollection={handleSelectCollection}
         onCreateCollection={() => { setEditingCollection(null); setShowCollectionModal(true); }}
         onExportProject={handleExportProject}
         onImportProject={handleImportProject}
@@ -472,8 +561,9 @@ export const Dashboard = () => {
                   parsedData={parsedData || undefined}
                   separator={parsedSeparator}
                   rootKey={parsedRootKey}
+                  onDirtyChange={setIsEditorDirty}
                   onSave={handleSaveEndpoint}
-                  onCancel={() => { setView('dashboard'); setParsedData(null); }}
+                  onCancel={() => { setView('dashboard'); setParsedData(null); setIsEditorDirty(false); }}
                 />
               </motion.div>
             )}
@@ -489,8 +579,9 @@ export const Dashboard = () => {
                   collectionId={editingEndpoint.collectionId}
                   collectionAlias={collections.find(c => c.id === editingEndpoint.collectionId)?.alias}
                   endpoint={editingEndpoint}
+                  onDirtyChange={setIsEditorDirty}
                   onSave={handleUpdateEndpoint}
-                  onCancel={() => { setView('dashboard'); setEditingEndpoint(null); }}
+                  onCancel={() => { setView('dashboard'); setEditingEndpoint(null); setIsEditorDirty(false); }}
                 />
               </motion.div>
             )}
@@ -522,6 +613,41 @@ export const Dashboard = () => {
         }}
         onCancel={() => setPendingDeleteCollectionId(null)}
       />
+
+      <Modal
+        open={pendingCollectionId !== null}
+        onClose={() => setPendingCollectionId(null)}
+        title="¿Cambios sin guardar?"
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+            Tienes cambios sin guardar en este endpoint. ¿Deseas guardar los cambios antes de cambiar de colección?
+          </p>
+          <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setPendingCollectionId(null)}
+              className="btn-secondary text-xs py-2 px-3"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleDiscardAndSwitchCollection}
+              className="text-xs py-2 px-3 rounded-lg font-medium bg-danger-500/10 hover:bg-danger-500/20 text-danger-400 transition-colors"
+            >
+              Descartar y salir
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveAndSwitchCollection}
+              className="btn-primary text-xs py-2 px-3.5"
+            >
+              Guardar y cambiar
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

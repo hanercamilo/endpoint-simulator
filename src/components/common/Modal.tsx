@@ -26,7 +26,7 @@ export const Modal = ({ open, onClose, title, children, maxWidth = 'max-w-lg' }:
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            className={`relative w-full ${maxWidth} glass-card z-10 flex flex-col max-h-[90vh]`}
+            className={`relative w-full ${maxWidth} bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl shadow-2xl z-10 flex flex-col max-h-[90vh]`}
           >
             <div className="flex items-center justify-between p-6 pb-0 mb-5 shrink-0">
               <h2 className="text-lg font-semibold text-[var(--text-primary)]">{title}</h2>

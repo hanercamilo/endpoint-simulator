@@ -112,9 +112,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// API route: GET /e/:alias/:slug
-app.get('/e/:alias/:slug', async (req: Request, res: Response) => {
-  const { alias, slug } = req.params;
+// API route: GET /e/:alias/*
+app.get('/e/:alias/*', async (req: Request, res: Response) => {
+  const { alias } = req.params;
+  const slug = (req.params[0] || '').replace(/^\/+|\/+$/g, '');
 
   try {
     const supabase = getSupabaseClient();
@@ -134,22 +135,60 @@ app.get('/e/:alias/:slug', async (req: Request, res: Response) => {
       );
     }
 
-    // Fetch endpoint from Supabase joined with collections to match alias
-    const { data, error } = await supabase
+    // Fetch endpoint from Supabase joined with collections to match alias (exact match first, then path params)
+    let endpoint: any = null;
+    let pathParams: Record<string, string> = {};
+
+    const { data: exactData, error: exactError } = await supabase
       .from('endpoints')
       .select('*, collections!inner(alias)')
       .eq('slug', slug)
       .eq('collections.alias', alias)
-      .single();
+      .maybeSingle();
 
-    if (error || !data) {
-      console.warn(`Endpoint not found: ${alias}/${slug}. Error details:`, error);
+    if (exactData) {
+      endpoint = exactData;
+    } else {
+      const { data: collectionEps } = await supabase
+        .from('endpoints')
+        .select('*, collections!inner(alias)')
+        .eq('collections.alias', alias);
+
+      if (collectionEps) {
+        const reqSegments = slug.split('/');
+        for (const candidate of collectionEps) {
+          const epSegments = (candidate.slug || '').split('/');
+          if (epSegments.length !== reqSegments.length) continue;
+
+          const captured: Record<string, string> = {};
+          let matched = true;
+          for (let i = 0; i < epSegments.length; i++) {
+            const epSeg = epSegments[i];
+            const reqSeg = reqSegments[i];
+            const paramMatch = epSeg.match(/^\{([a-zA-Z0-9_]+)\}$/);
+            if (paramMatch) {
+              captured[paramMatch[1]] = decodeURIComponent(reqSeg);
+            } else if (epSeg !== reqSeg) {
+              matched = false;
+              break;
+            }
+          }
+          if (matched) {
+            endpoint = candidate;
+            pathParams = captured;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!endpoint) {
+      console.warn(`Endpoint not found: ${alias}/${slug}. Error details:`, exactError);
       return res.status(404).json(
         buildResponse(null, 404)
       );
     }
 
-    const endpoint = data as any;
     const responseConfig = endpoint.responseConfig || endpoint.response_config || {};
     const config = responseConfig.httpCodes?.find(
       (c: HttpCodeConfig) => c.enabled
@@ -166,8 +205,10 @@ app.get('/e/:alias/:slug', async (req: Request, res: Response) => {
       }
     }
 
-    // Check if filtering or pagination is enabled
-    const hasFiltering = responseConfig.filtering?.enabled;
+    // Check if filtering, path params, or pagination is enabled
+    const hasPathParams = Object.keys(pathParams).length > 0;
+    const hasQueryFiltering = Boolean(responseConfig.filtering?.enabled);
+    const hasFiltering = hasQueryFiltering || hasPathParams;
     const hasPagination = responseConfig.pagination?.enabled;
 
     if ((hasFiltering || hasPagination) && responseData) {
@@ -194,8 +235,17 @@ app.get('/e/:alias/:slug', async (req: Request, res: Response) => {
       }
       
       if (sourceArray) {
-        // Apply Filtering
-        if (hasFiltering) {
+        // Apply Path Parameter Filtering
+        if (hasPathParams) {
+          sourceArray = sourceArray.filter(item => {
+            return Object.entries(pathParams).every(([k, v]) => {
+              return String(item[k]) === String(v);
+            });
+          });
+        }
+
+        // Apply Query Filtering
+        if (hasQueryFiltering) {
           const excludedKeys: string[] = [];
           if (hasPagination && pag) {
             excludedKeys.push(pag.pageParam, pag.limitParam);
@@ -209,14 +259,13 @@ app.get('/e/:alias/:slug', async (req: Request, res: Response) => {
               });
             });
           }
-          
-          // If no pagination will wrap it, we must update the data structure
-          if (!hasPagination) {
-            if (Array.isArray(responseData)) {
-              responseData = sourceArray;
-            } else if (sourceArrayKey) {
-              responseData = { ...responseData, [sourceArrayKey]: sourceArray };
-            }
+        }
+
+        if (hasFiltering && !hasPagination) {
+          if (Array.isArray(responseData)) {
+            responseData = sourceArray;
+          } else if (sourceArrayKey) {
+            responseData = { ...responseData, [sourceArrayKey]: sourceArray };
           }
         }
 

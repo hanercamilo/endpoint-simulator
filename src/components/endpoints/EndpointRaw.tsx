@@ -4,7 +4,8 @@ import { db } from '../../lib/db';
 import { buildResponse } from '../../lib/parser';
 
 export const EndpointRaw = () => {
-  const { alias, slug } = useParams<{ alias: string; slug: string }>();
+  const { alias, '*': rawSlug } = useParams<{ alias: string; '*': string }>();
+  const slug = rawSlug?.replace(/^\/+|\/+$/g, '');
   const [json, setJson] = useState<string | null>(null);
 
   useEffect(() => {
@@ -13,11 +14,40 @@ export const EndpointRaw = () => {
       
       const col = await db.collections.where('alias').equals(alias).first();
       let ep;
+      let pathParams: Record<string, string> = {};
       
       if (col) {
         ep = await db.endpoints
           .where({ collectionId: col.id, slug })
           .first();
+
+        if (!ep) {
+          const collectionEps = await db.endpoints.where('collectionId').equals(col.id).toArray();
+          const reqSegments = slug.split('/');
+          for (const candidate of collectionEps) {
+            const epSegments = (candidate.slug || '').split('/');
+            if (epSegments.length !== reqSegments.length) continue;
+
+            const captured: Record<string, string> = {};
+            let matched = true;
+            for (let i = 0; i < epSegments.length; i++) {
+              const epSeg = epSegments[i];
+              const reqSeg = reqSegments[i];
+              const paramMatch = epSeg.match(/^\{([a-zA-Z0-9_]+)\}$/);
+              if (paramMatch) {
+                captured[paramMatch[1]] = decodeURIComponent(reqSeg);
+              } else if (epSeg !== reqSeg) {
+                matched = false;
+                break;
+              }
+            }
+            if (matched) {
+              ep = candidate;
+              pathParams = captured;
+              break;
+            }
+          }
+        }
       }
 
       if (!ep) {
@@ -31,8 +61,10 @@ export const EndpointRaw = () => {
         try { data = JSON.parse(data); } catch { /* keep as string */ }
       }
 
-      // Check if filtering or pagination is enabled
-      const hasFiltering = ep.responseConfig.filtering?.enabled;
+      // Check if filtering, path params, or pagination is enabled
+      const hasPathParams = Object.keys(pathParams).length > 0;
+      const hasQueryFiltering = Boolean(ep.responseConfig.filtering?.enabled);
+      const hasFiltering = hasQueryFiltering || hasPathParams;
       const hasPagination = ep.responseConfig.pagination?.enabled;
 
       if ((hasFiltering || hasPagination) && data) {
@@ -61,8 +93,17 @@ export const EndpointRaw = () => {
         if (sourceArray) {
           const query = new URLSearchParams(window.location.search);
           
-          // Apply Filtering
-          if (hasFiltering) {
+          // Apply Path Parameter Filtering
+          if (hasPathParams) {
+            sourceArray = sourceArray.filter(item => {
+              return Object.entries(pathParams).every(([k, v]) => {
+                return String(item[k]) === String(v);
+              });
+            });
+          }
+
+          // Apply Query Filtering
+          if (hasQueryFiltering) {
             const excludedKeys: string[] = [];
             if (hasPagination && pag) {
               excludedKeys.push(pag.pageParam, pag.limitParam);
@@ -76,14 +117,14 @@ export const EndpointRaw = () => {
                 });
               });
             }
-            
-            // If no pagination will wrap it, we must update the data structure
-            if (!hasPagination) {
-              if (Array.isArray(data)) {
-                data = sourceArray;
-              } else if (sourceArrayKey) {
-                data = { ...data, [sourceArrayKey]: sourceArray };
-              }
+          }
+
+          // If no pagination will wrap it, we must update the data structure
+          if (hasFiltering && !hasPagination) {
+            if (Array.isArray(data)) {
+              data = sourceArray;
+            } else if (sourceArrayKey) {
+              data = { ...data, [sourceArrayKey]: sourceArray };
             }
           }
           

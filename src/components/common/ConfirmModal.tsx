@@ -35,7 +35,7 @@ export const ConfirmModal = ({
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            className="relative w-full max-w-sm glass-card z-10"
+            className="relative w-full max-w-sm bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl shadow-2xl z-10"
           >
             <div className="flex items-center justify-between p-5 pb-0">
               <div className="flex items-center gap-2.5">
