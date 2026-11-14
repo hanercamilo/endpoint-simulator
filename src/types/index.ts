@@ -4,6 +4,10 @@ export interface Collection {
   alias: string;
   description: string;
   userId: string;
+  requireAuth?: boolean;
+  authHeaderName?: string;
+  authToken?: string | null;
+  authExpiresAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

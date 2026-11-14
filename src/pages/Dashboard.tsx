@@ -12,7 +12,7 @@ import { Sidebar } from '../components/layout/Sidebar';
 import { DataImport } from '../components/data-import/DataImport';
 import { EndpointEditor } from '../components/endpoints/EndpointEditor';
 import { EndpointList } from '../components/endpoints/EndpointList';
-import { CollectionForm } from '../components/collections/CollectionForm';
+import { CollectionForm, type CollectionFormSubmitData } from '../components/collections/CollectionForm';
 import { Modal } from '../components/common/Modal';
 import { ConfirmModal } from '../components/common/ConfirmModal';
 import { useAuth } from '../hooks/useAuth';
@@ -28,6 +28,10 @@ interface SbCollection {
   alias: string;
   description: string;
   user_id: string;
+  require_auth?: boolean;
+  auth_header_name?: string;
+  auth_token?: string | null;
+  auth_expires_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -125,6 +129,10 @@ export const Dashboard = () => {
       alias: c.alias || c.name.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
       description: c.description || '',
       userId: c.user_id,
+      requireAuth: Boolean(c.require_auth),
+      authHeaderName: c.auth_header_name || 'Authorization',
+      authToken: c.auth_token || null,
+      authExpiresAt: c.auth_expires_at || null,
       createdAt: c.created_at,
       updatedAt: c.updated_at,
     }));
@@ -183,6 +191,10 @@ export const Dashboard = () => {
       alias: col.alias,
       description: col.description,
       user_id: user.id,
+      require_auth: Boolean(col.requireAuth),
+      auth_header_name: col.authHeaderName || 'Authorization',
+      auth_token: col.authToken ?? null,
+      auth_expires_at: col.authExpiresAt ?? null,
       updated_at: col.updatedAt,
     };
     
@@ -224,7 +236,7 @@ export const Dashboard = () => {
     await (supabase as any).from(table).delete().eq('id', id);
   };
 
-  const handleCreateCollection = async (data: { name: string; alias: string; description: string }) => {
+  const handleCreateCollection = async (data: CollectionFormSubmitData) => {
     const now = new Date().toISOString();
     const col: Collection = {
       id: crypto.randomUUID(),
@@ -232,6 +244,10 @@ export const Dashboard = () => {
       alias: data.alias,
       description: data.description,
       userId: user?.id || 'local',
+      requireAuth: data.requireAuth,
+      authHeaderName: data.authHeaderName,
+      authToken: data.authToken,
+      authExpiresAt: data.authExpiresAt,
       createdAt: now,
       updatedAt: now,
     };
@@ -243,13 +259,17 @@ export const Dashboard = () => {
     await loadLocalData();
   };
 
-  const handleUpdateCollection = async (data: { name: string; alias: string; description: string }) => {
+  const handleUpdateCollection = async (data: CollectionFormSubmitData) => {
     if (!editingCollection) return;
     const updated: Collection = {
       ...editingCollection,
       name: data.name,
       alias: data.alias,
       description: data.description,
+      requireAuth: data.requireAuth,
+      authHeaderName: data.authHeaderName,
+      authToken: data.authToken,
+      authExpiresAt: data.authExpiresAt,
       updatedAt: new Date().toISOString(),
     };
     await db.collections.put(updated);

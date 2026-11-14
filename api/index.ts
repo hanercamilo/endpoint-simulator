@@ -33,7 +33,13 @@ app.use(express.json());
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  const requestedHeaders = req.headers['access-control-request-headers'];
+  res.header(
+    'Access-Control-Allow-Headers',
+    typeof requestedHeaders === 'string' && requestedHeaders.trim()
+      ? requestedHeaders
+      : 'Content-Type, Authorization, Authorize, JwtToken, X-API-Key'
+  );
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
@@ -141,7 +147,7 @@ app.get('/e/:alias/*', async (req: Request, res: Response) => {
 
     const { data: exactData, error: exactError } = await supabase
       .from('endpoints')
-      .select('*, collections!inner(alias)')
+      .select('*, collections!inner(alias, require_auth, auth_header_name, auth_token, auth_expires_at)')
       .eq('slug', slug)
       .eq('collections.alias', alias)
       .maybeSingle();
@@ -151,7 +157,7 @@ app.get('/e/:alias/*', async (req: Request, res: Response) => {
     } else {
       const { data: collectionEps } = await supabase
         .from('endpoints')
-        .select('*, collections!inner(alias)')
+        .select('*, collections!inner(alias, require_auth, auth_header_name, auth_token, auth_expires_at)')
         .eq('collections.alias', alias);
 
       if (collectionEps) {
@@ -187,6 +193,46 @@ app.get('/e/:alias/*', async (req: Request, res: Response) => {
       return res.status(404).json(
         buildResponse(null, 404)
       );
+    }
+
+    // Validate optional collection header token
+    const collectionAuth = Array.isArray(endpoint.collections)
+      ? endpoint.collections[0]
+      : endpoint.collections;
+
+    if (collectionAuth?.require_auth) {
+      const headerName = (collectionAuth.auth_header_name || 'Authorization').trim();
+      const rawHeader = req.headers[headerName.toLowerCase()];
+      const rawValue = Array.isArray(rawHeader) ? rawHeader[0] : rawHeader;
+
+      if (!rawValue || !rawValue.trim()) {
+        return res.status(401).json({
+          status: false,
+          data: null,
+          errors: [{ code: 401, message: `Unauthorized: Missing required header "${headerName}"` }],
+        });
+      }
+
+      const incomingToken = rawValue.replace(/^Bearer\s+/i, '').trim();
+
+      if (
+        collectionAuth.auth_expires_at &&
+        new Date(collectionAuth.auth_expires_at).getTime() <= Date.now()
+      ) {
+        return res.status(401).json({
+          status: false,
+          data: null,
+          errors: [{ code: 401, message: 'Unauthorized: Token expired' }],
+        });
+      }
+
+      if (!collectionAuth.auth_token || incomingToken !== collectionAuth.auth_token) {
+        return res.status(401).json({
+          status: false,
+          data: null,
+          errors: [{ code: 401, message: 'Unauthorized: Invalid token' }],
+        });
+      }
     }
 
     const responseConfig = endpoint.responseConfig || endpoint.response_config || {};
